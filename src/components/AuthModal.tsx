@@ -127,6 +127,10 @@ export const AuthModal: React.FC<Props> = ({
         if (!email) {
           setEmail('eggsverse@gmail.com');
         }
+      } else if (code === 'auth/unauthorized-domain' || errStr.includes('unauthorized-domain')) {
+        setError(
+          'Domain authorization notice: Google OAuth popup is not authorized for this domain. Email & Password registration/login is fully active — please register or sign in with your email below.'
+        );
       } else if (code === 'auth/popup-blocked' || errStr.includes('popup-blocked')) {
         setError('Popup was blocked by your browser. Please allow popups or use Email & Password below.');
       } else if (code === 'auth/popup-closed-by-user') {
