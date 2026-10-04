@@ -1,0 +1,158 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSuperOwner() {
+      return isSignedIn() && (
+        (request.auth.token.email != null && request.auth.token.email == 'eggsverse@gmail.com') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'OWNER')
+      );
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        isSuperOwner() ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'OWNER'])
+      );
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Test connection doc for startup verification
+    match /test/{docId} {
+      allow read: if true;
+    }
+
+    // USERS COLLECTION
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && (
+        (request.auth.uid == userId && incoming().uid == userId && (incoming().role == 'USER' || (isSuperOwner() && incoming().role == 'OWNER')) && incoming().status == 'ACTIVE') ||
+        isSuperOwner()
+      );
+      allow update: if isSignedIn() && (
+        isSuperOwner() ||
+        isAdmin() ||
+        (isOwner(userId) &&
+         incoming().uid == existing().uid &&
+         incoming().role == existing().role &&
+         incoming().diff(existing()).affectedKeys().hasOnly(['username', 'updatedAt']))
+      );
+      allow delete: if isSuperOwner();
+    }
+
+    // WALLETS COLLECTION
+    match /wallets/{walletId} {
+      allow get: if isOwner(walletId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && (
+        (isOwner(walletId) && incoming().userId == walletId && incoming().balance == 0) ||
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (isOwner(walletId) && incoming().userId == existing().userId)
+      );
+      allow delete: if isSuperOwner();
+    }
+
+    // PLANS CATALOG (Public read, Owner/Admin write)
+    match /plans/{planId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // USER PLANS (Active flocks)
+    match /userPlans/{userPlanId} {
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid;
+      allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // TRANSACTIONS LEDGER (Immutable)
+    match /transactions/{transactionId} {
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && (incoming().userId == request.auth.uid || isAdmin());
+      allow update, delete: if false;
+    }
+
+    // DEPOSIT REQUESTS
+    match /deposits/{depositId} {
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && incoming().status == 'PENDING';
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // WITHDRAWAL REQUESTS
+    match /withdrawals/{withdrawalId} {
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && incoming().userId == request.auth.uid && incoming().status == 'PENDING';
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // REFERRALS
+    match /referrals/{referralId} {
+      allow get: if isSignedIn() && (resource.data.referrerId == request.auth.uid || resource.data.refereeId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.referrerId == request.auth.uid || resource.data.refereeId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && incoming().refereeId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // NOTIFICATIONS
+    match /notifications/{notificationId} {
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.userId == 'ALL' || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.userId == 'ALL' || isAdmin());
+      allow create: if isAdmin();
+      allow update: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // SETTINGS (Publicly readable general settings, Owner/Admin writable)
+    match /settings/{settingId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ADMIN AUDIT LOGS (Immutable, admin only)
+    match /adminAuditLogs/{logId} {
+      allow get, list: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+  }
+}

@@ -1,0 +1,269 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with authentication and role information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "username": { "type": "string", "maxLength": 64 },
+        "role": { "type": "string", "enum": ["USER", "ADMIN", "OWNER"] },
+        "status": { "type": "string", "enum": ["ACTIVE", "SUSPENDED"] },
+        "referralCode": { "type": "string", "maxLength": 32 },
+        "referredBy": { "type": "string", "maxLength": 32 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "email", "username", "role", "status", "referralCode"]
+    },
+    "Wallet": {
+      "title": "Wallet",
+      "description": "User wallet ledger holding balance, egg count, and pending financial metrics",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "balance": { "type": "number" },
+        "availableEggs": { "type": "number" },
+        "pendingDeposits": { "type": "number" },
+        "pendingWithdrawals": { "type": "number" },
+        "totalDeposited": { "type": "number" },
+        "totalWithdrawn": { "type": "number" },
+        "totalEggRewards": { "type": "number" },
+        "totalReferralRewards": { "type": "number" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "balance", "availableEggs"]
+    },
+    "Plan": {
+      "title": "Plan",
+      "description": "Configurable digital hen flock plan",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "planNumber": { "type": "number" },
+        "name": { "type": "string", "maxLength": 128 },
+        "price": { "type": "number" },
+        "cycleDays": { "type": "number" },
+        "dailyEggs": { "type": "number" },
+        "eggValuePkr": { "type": "number" },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] },
+        "sortOrder": { "type": "number" },
+        "henType": { "type": "string", "maxLength": 64 },
+        "description": { "type": "string", "maxLength": 512 },
+        "terms": { "type": "string", "maxLength": 512 }
+      },
+      "required": ["id", "name", "price", "cycleDays", "dailyEggs", "eggValuePkr", "status"]
+    },
+    "UserPlan": {
+      "title": "UserPlan",
+      "description": "Active flock owned by an individual user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "planId": { "type": "string", "maxLength": 64 },
+        "planName": { "type": "string", "maxLength": 128 },
+        "purchasePrice": { "type": "number" },
+        "cycleDays": { "type": "number" },
+        "dailyEggs": { "type": "number" },
+        "eggValuePkr": { "type": "number" },
+        "eggsCollectedTotal": { "type": "number" },
+        "lastCollectedAt": { "type": "string" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "status": { "type": "string", "enum": ["ACTIVE", "COMPLETED", "EXPIRED"] }
+      },
+      "required": ["id", "userId", "planId", "planName", "purchasePrice", "status"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Immutable ledger record for every balance and egg operation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["DEPOSIT", "WITHDRAWAL", "PLAN_PURCHASE", "REWARD", "REFERRAL_REWARD", "ADJUSTMENT", "REFUND", "EGG_SALE"] },
+        "amount": { "type": "number" },
+        "direction": { "type": "string", "enum": ["CREDIT", "DEBIT"] },
+        "status": { "type": "string", "enum": ["COMPLETED", "PENDING", "FAILED", "CANCELLED"] },
+        "referenceId": { "type": "string", "maxLength": 128 },
+        "description": { "type": "string", "maxLength": 256 },
+        "adminNote": { "type": "string", "maxLength": 256 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "type", "amount", "direction", "status", "createdAt"]
+    },
+    "Deposit": {
+      "title": "Deposit",
+      "description": "Real-money payment verification request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "userEmail": { "type": "string", "maxLength": 256 },
+        "userName": { "type": "string", "maxLength": 64 },
+        "amount": { "type": "number" },
+        "method": { "type": "string", "enum": ["EASYPAISA", "JAZZCASH", "BANK_TRANSFER"] },
+        "senderAccount": { "type": "string", "maxLength": 64 },
+        "transactionId": { "type": "string", "maxLength": 128 },
+        "proofUrl": { "type": "string", "maxLength": 512 },
+        "notes": { "type": "string", "maxLength": 512 },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED"] },
+        "approvedBy": { "type": "string", "maxLength": 128 },
+        "rejectionReason": { "type": "string", "maxLength": 256 },
+        "createdAt": { "type": "string" },
+        "reviewedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "amount", "method", "senderAccount", "transactionId", "status"]
+    },
+    "Withdrawal": {
+      "title": "Withdrawal",
+      "description": "User withdrawal request and processing trail",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "userEmail": { "type": "string", "maxLength": 256 },
+        "userName": { "type": "string", "maxLength": 64 },
+        "amount": { "type": "number" },
+        "fee": { "type": "number" },
+        "netAmount": { "type": "number" },
+        "method": { "type": "string", "enum": ["EASYPAISA", "JAZZCASH", "BANK_TRANSFER"] },
+        "accountNumber": { "type": "string", "maxLength": 64 },
+        "accountTitle": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED", "PROCESSING", "PAID", "REJECTED"] },
+        "adminNote": { "type": "string", "maxLength": 256 },
+        "processedBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "amount", "method", "accountNumber", "accountTitle", "status"]
+    },
+    "Referral": {
+      "title": "Referral",
+      "description": "Multi-tier network connection and rewards mapping",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "referrerId": { "type": "string", "maxLength": 128 },
+        "refereeId": { "type": "string", "maxLength": 128 },
+        "refereeEmail": { "type": "string", "maxLength": 256 },
+        "refereeUsername": { "type": "string", "maxLength": 64 },
+        "level": { "type": "number" },
+        "totalCommissionEarned": { "type": "number" },
+        "status": { "type": "string", "enum": ["ACTIVE"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "referrerId", "refereeId", "level", "status"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User and system broadcast notifications",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 128 },
+        "message": { "type": "string", "maxLength": 512 },
+        "type": { "type": "string", "enum": ["INFO", "SUCCESS", "WARNING", "SYSTEM"] },
+        "isRead": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "title", "message", "type", "isRead"]
+    },
+    "Setting": {
+      "title": "Setting",
+      "description": "Global application configuration for payments, disclaimers, and controls",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "appName": { "type": "string", "maxLength": 64 },
+        "supportEmail": { "type": "string", "maxLength": 256 },
+        "whatsappNumber": { "type": "string", "maxLength": 32 },
+        "currency": { "type": "string", "maxLength": 8 },
+        "maintenanceMode": { "type": "boolean" },
+        "easypaisaNumber": { "type": "string", "maxLength": 32 },
+        "easypaisaTitle": { "type": "string", "maxLength": 128 },
+        "jazzcashNumber": { "type": "string", "maxLength": 32 },
+        "jazzcashTitle": { "type": "string", "maxLength": 128 },
+        "depositInstructions": { "type": "string", "maxLength": 1024 },
+        "withdrawalInstructions": { "type": "string", "maxLength": 1024 },
+        "minDeposit": { "type": "number" },
+        "maxDeposit": { "type": "number" },
+        "minWithdrawal": { "type": "number" },
+        "maxWithdrawal": { "type": "number" },
+        "withdrawalFeePercent": { "type": "number" },
+        "depositEnabled": { "type": "boolean" },
+        "withdrawalEnabled": { "type": "boolean" },
+        "referralCommissionTier1": { "type": "number" },
+        "referralCommissionTier2": { "type": "number" },
+        "referralCommissionTier3": { "type": "number" },
+        "referralEnabled": { "type": "boolean" }
+      },
+      "required": ["id"]
+    },
+    "AdminAuditLog": {
+      "title": "AdminAuditLog",
+      "description": "Immutable log of administrative and owner operations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "adminId": { "type": "string", "maxLength": 128 },
+        "adminEmail": { "type": "string", "maxLength": 256 },
+        "action": { "type": "string", "maxLength": 128 },
+        "targetType": { "type": "string", "maxLength": 64 },
+        "targetId": { "type": "string", "maxLength": 128 },
+        "details": { "type": "string", "maxLength": 1024 },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "adminId", "adminEmail", "action", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile records containing account state and roles"
+    },
+    "/wallets/{walletId}": {
+      "schema": "Wallet",
+      "description": "User financial ledger doc indexed by userId"
+    },
+    "/plans/{planId}": {
+      "schema": "Plan",
+      "description": "Hen farm catalog plans (up to 30 plans)"
+    },
+    "/userPlans/{userPlanId}": {
+      "schema": "UserPlan",
+      "description": "Active flock instances owned by users"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Immutable balance transaction records"
+    },
+    "/deposits/{depositId}": {
+      "schema": "Deposit",
+      "description": "Deposit requests for admin approval"
+    },
+    "/withdrawals/{withdrawalId}": {
+      "schema": "Withdrawal",
+      "description": "Withdrawal payout requests"
+    },
+    "/referrals/{referralId}": {
+      "schema": "Referral",
+      "description": "Referral relationship and rewards records"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User in-app notifications"
+    },
+    "/settings/{settingId}": {
+      "schema": "Setting",
+      "description": "System settings and payment configurations"
+    },
+    "/adminAuditLogs/{logId}": {
+      "schema": "AdminAuditLog",
+      "description": "Audit trail of admin operations"
+    }
+  }
+}
