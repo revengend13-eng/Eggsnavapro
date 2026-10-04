@@ -1,12 +1,12 @@
 {
   "projectId": "eggs-nava-pro",
-  "appId": "1:423117403168:web:3d5ef0aa70c0f5ff3ab845",
-  "apiKey": "AIzaSyA3gaA2yOzZfXPpT88kFnLcqLH5pqBDF3s",
+  "appId": "1:423117403168:web:290b732836a309193ab845",
+  "apiKey": "AIzaSyA8PaCWSuzu2DaJlfyGH65GQggVg_6LXPE",
   "authDomain": "eggs-nava-pro.firebaseapp.com",
   "firestoreDatabaseId": "ai-studio-0c5fe44a-5202-455c-a321-28dbfa30fdd6",
   "storageBucket": "eggs-nava-pro.firebasestorage.app",
   "messagingSenderId": "423117403168",
   "measurementId": "",
-  "oAuthClientId": "423117403168-9nr0734cu7ni62bt72msh9vbdsqt9gk9.apps.googleusercontent.com",
+  "oAuthClientId": "423117403168-pvtie45qrfspvdc49dhlch6hc02l7g1h.apps.googleusercontent.com",
   "recaptchaSiteKey": ""
 }

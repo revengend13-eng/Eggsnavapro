@@ -30,21 +30,23 @@ const sanitizeProjectConfig = () => {
   return {
     projectId: (envProjectId && !envProjectId.includes('eggsverse')) 
       ? envProjectId 
-      : 'eggs-nava-pro',
+      : (firebaseConfig.projectId || 'eggs-nava-pro'),
     authDomain: (envAuthDomain && !envAuthDomain.includes('eggsverse')) 
       ? envAuthDomain 
-      : 'eggs-nava-pro.firebaseapp.com',
+      : (firebaseConfig.authDomain || 'eggs-nava-pro.firebaseapp.com'),
     appId: (envAppId && !envAppId.includes('1081536876093')) 
       ? envAppId 
-      : '1:423117403168:web:3d5ef0aa70c0f5ff3ab845',
-    apiKey: envApiKey || firebaseConfig.apiKey,
+      : (firebaseConfig.appId || '1:423117403168:web:290b732836a309193ab845'),
+    apiKey: (envApiKey && !envApiKey.includes('AIzaSyA3gaA2yOzZfXPpT88kFnLcqLH5pqBDF3s'))
+      ? envApiKey
+      : (firebaseConfig.apiKey || 'AIzaSyA8PaCWSuzu2DaJlfyGH65GQggVg_6LXPE'),
     firestoreDatabaseId: envDbId || firebaseConfig.firestoreDatabaseId || 'ai-studio-0c5fe44a-5202-455c-a321-28dbfa30fdd6',
     storageBucket: (envStorageBucket && !envStorageBucket.includes('eggsverse')) 
       ? envStorageBucket 
-      : 'eggs-nava-pro.firebasestorage.app',
+      : (firebaseConfig.storageBucket || 'eggs-nava-pro.firebasestorage.app'),
     messagingSenderId: (envSenderId && envSenderId !== '1081536876093') 
       ? envSenderId 
-      : '423117403168',
+      : (firebaseConfig.messagingSenderId || '423117403168'),
   };
 };
 
