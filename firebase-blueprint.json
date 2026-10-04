@@ -264,6 +264,14 @@
     "/adminAuditLogs/{logId}": {
       "schema": "AdminAuditLog",
       "description": "Audit trail of admin operations"
+    },
+    "/owners/{ownerId}": {
+      "schema": "User",
+      "description": "Master platform owner authority tracking"
+    },
+    "/admins/{adminId}": {
+      "schema": "User",
+      "description": "Administrator authority and permissions registry"
     }
   }
 }

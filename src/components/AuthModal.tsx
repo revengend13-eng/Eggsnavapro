@@ -20,6 +20,7 @@ interface Props {
   initialRefCode?: string;
   onClose: () => void;
   onSuccess?: () => void;
+  onNavigatePortal?: (portal: 'owner' | 'admin') => void;
 }
 
 export const AuthModal: React.FC<Props> = ({
@@ -27,7 +28,8 @@ export const AuthModal: React.FC<Props> = ({
   initialMode = 'register',
   initialRefCode = '',
   onClose,
-  onSuccess
+  onSuccess,
+  onNavigatePortal
 }) => {
   const { registerWithEmail, loginWithEmail } = useAuth();
   const [mode, setMode] = useState<'login' | 'register'>(initialMode);
@@ -278,7 +280,27 @@ export const AuthModal: React.FC<Props> = ({
           </button>
         </form>
 
-        <p className="text-[11px] text-slate-500 text-center mt-5">
+        {onNavigatePortal && (
+          <div className="mt-4 pt-3.5 border-t border-slate-800 text-center flex items-center justify-center gap-4 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => { onClose(); onNavigatePortal('owner'); }}
+              className="text-amber-400 hover:text-amber-300 transition"
+            >
+              👑 Owner Portal →
+            </button>
+            <span className="text-slate-600">•</span>
+            <button
+              type="button"
+              onClick={() => { onClose(); onNavigatePortal('admin'); }}
+              className="text-emerald-400 hover:text-emerald-300 transition"
+            >
+              🛡️ Admin Portal →
+            </button>
+          </div>
+        )}
+
+        <p className="text-[11px] text-slate-500 text-center mt-4">
           By signing up, you agree to our Digital Farm Rules & Terms of Service. Passwords are encrypted securely via Firebase Authentication.
         </p>
       </div>

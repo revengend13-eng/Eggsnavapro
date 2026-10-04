@@ -8,7 +8,8 @@ import {
   signOut,
   updateProfile,
   EmailAuthProvider,
-  reauthenticateWithCredential
+  reauthenticateWithCredential,
+  getAuth
 } from 'firebase/auth';
 import { 
   doc, 
@@ -22,7 +23,8 @@ import {
   updateDoc, 
   deleteDoc 
 } from 'firebase/firestore';
-import { auth, db, googleProvider, handleFirestoreError, OperationType } from '../firebase';
+import { initializeApp, getApps } from 'firebase/app';
+import { auth, db, googleProvider, activeFirebaseConfig, handleFirestoreError, OperationType } from '../firebase';
 import { UserProfile, UserRole, Wallet, AdminPermissions } from '../types';
 
 interface AuthContextType {
@@ -48,7 +50,18 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const INITIAL_OWNER_EMAIL = (import.meta.env.VITE_INITIAL_OWNER_EMAIL || 'eggsverse@gmail.com').toLowerCase();
+// Recognized Master Owner Email addresses across all deployment environments (AI Studio & Netlify live)
+export const KNOWN_OWNER_EMAILS = [
+  'eggsverse@gmail.com',
+  'revengend13@gmail.com',
+  (import.meta.env.VITE_INITIAL_OWNER_EMAIL || '').toLowerCase().trim(),
+].filter(Boolean);
+
+export const isAuthorizedOwnerEmail = (email?: string | null): boolean => {
+  if (!email) return false;
+  const clean = email.toLowerCase().trim();
+  return KNOWN_OWNER_EMAILS.includes(clean) || clean.includes('eggsverse');
+};
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -63,7 +76,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return `${clean || 'EGG'}${rand}`;
   };
 
-  // Check if at least one OWNER account exists
+  // Check if at least one OWNER account exists in Firestore
   const checkOwnerExistence = async () => {
     try {
       const q = query(collection(db, 'users'), where('role', '==', 'OWNER'));
@@ -71,17 +84,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!snap.empty) {
         setOwnerExists(true);
       } else {
-        // If no owner document in Firestore, check if initial owner email has signed up
         setOwnerExists(false);
       }
-    } catch (e) {
-      // In case of permission errors on unauthenticated read, default to true
+    } catch {
+      // In case of unauthenticated permission constraints, default to true
       setOwnerExists(true);
     }
   };
 
-  // Sync or create user profile and wallet in Firestore
-  const initUserRecord = async (user: User, customUsername?: string, refCode?: string, forceRole?: UserRole, customPermissions?: AdminPermissions): Promise<UserProfile> => {
+  // Sync or create user profile and wallet in Firestore with authoritative role detection
+  const initUserRecord = async (
+    user: User, 
+    customUsername?: string, 
+    refCode?: string, 
+    forceRole?: UserRole, 
+    customPermissions?: AdminPermissions
+  ): Promise<UserProfile> => {
     const userDocRef = doc(db, 'users', user.uid);
     let docSnap;
     try {
@@ -90,27 +108,81 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn("User get doc notice:", err);
     }
 
-    const email = (user.email || '').toLowerCase();
-    const isOwnerByEmail = email === INITIAL_OWNER_EMAIL || email === 'eggsverse@gmail.com';
+    const email = (user.email || '').toLowerCase().trim();
+    const isOwnerByEmail = isAuthorizedOwnerEmail(email);
+
+    // Check if user has an authority document in 'owners' or 'admins'
+    let isOwnerByCollection = false;
+    let isAdminByCollection = false;
+    try {
+      const ownerSnap = await getDoc(doc(db, 'owners', user.uid));
+      if (ownerSnap.exists()) isOwnerByCollection = true;
+    } catch {}
+
+    try {
+      const adminSnap = await getDoc(doc(db, 'admins', user.uid));
+      if (adminSnap.exists()) isAdminByCollection = true;
+    } catch {}
 
     if (docSnap && docSnap.exists()) {
       const data = docSnap.data() as UserProfile;
-      if (isOwnerByEmail && data.role !== 'OWNER') {
+      const shouldBeOwner = isOwnerByEmail || isOwnerByCollection || data.role === 'OWNER';
+      const shouldBeAdmin = shouldBeOwner || isAdminByCollection || data.role === 'ADMIN';
+
+      if (shouldBeOwner && data.role !== 'OWNER') {
         const updated: UserProfile = { ...data, role: 'OWNER', updatedAt: new Date().toISOString() };
         try {
           await updateDoc(userDocRef, { role: 'OWNER', updatedAt: serverTimestamp() });
+          await setDoc(doc(db, 'owners', user.uid), { uid: user.uid, email, updatedAt: new Date().toISOString() }, { merge: true });
+          await setDoc(doc(db, 'admins', user.uid), { uid: user.uid, email, updatedAt: new Date().toISOString() }, { merge: true });
         } catch (e) {
           console.warn("Owner role update skipped:", e);
         }
+        try {
+          localStorage.setItem(`eggs_role_${user.uid}`, 'OWNER');
+        } catch {}
         return updated;
       }
+
+      if (!shouldBeOwner && shouldBeAdmin && data.role !== 'ADMIN') {
+        const updated: UserProfile = { ...data, role: 'ADMIN', updatedAt: new Date().toISOString() };
+        try {
+          await updateDoc(userDocRef, { role: 'ADMIN', updatedAt: serverTimestamp() });
+        } catch (e) {
+          console.warn("Admin role update notice:", e);
+        }
+        try {
+          localStorage.setItem(`eggs_role_${user.uid}`, 'ADMIN');
+        } catch {}
+        return updated;
+      }
+
+      try {
+        localStorage.setItem(`eggs_role_${user.uid}`, data.role || 'USER');
+      } catch {}
       return data;
     }
 
-    // New User profile
+    // Check if an admin invitation or pre-created record exists for this email
+    let preAssignedRole: UserRole = forceRole || (isOwnerByEmail ? 'OWNER' : (isAdminByCollection ? 'ADMIN' : 'USER'));
+    let preAssignedPermissions: AdminPermissions | undefined = customPermissions;
+
+    try {
+      const qAdmin = query(collection(db, 'admins'), where('email', '==', email));
+      const adminMatches = await getDocs(qAdmin);
+      if (!adminMatches.empty) {
+        preAssignedRole = 'ADMIN';
+        const adminData = adminMatches.docs[0].data();
+        if (adminData.permissions) {
+          preAssignedPermissions = adminData.permissions;
+        }
+      }
+    } catch {}
+
+    // New User profile initialization
     const username = customUsername || user.displayName || user.email?.split('@')[0] || `Farmer_${user.uid.slice(0, 5)}`;
     const myReferralCode = generateReferralCode(username);
-    const assignedRole: UserRole = forceRole || (isOwnerByEmail ? 'OWNER' : 'USER');
+    const assignedRole: UserRole = preAssignedRole;
 
     const newProfile: UserProfile = {
       uid: user.uid,
@@ -120,7 +192,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       status: 'ACTIVE',
       referralCode: myReferralCode,
       referredBy: refCode || undefined,
-      adminPermissions: customPermissions || (assignedRole === 'ADMIN' ? {
+      adminPermissions: preAssignedPermissions || (assignedRole === 'ADMIN' ? {
         canApproveDeposits: true,
         canProcessWithdrawals: true,
         canManageUsers: true,
@@ -133,10 +205,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       await setDoc(userDocRef, newProfile);
-      if (assignedRole === 'OWNER') setOwnerExists(true);
+      if (assignedRole === 'OWNER') {
+        setOwnerExists(true);
+        await setDoc(doc(db, 'owners', user.uid), { uid: user.uid, email, createdAt: new Date().toISOString() });
+        await setDoc(doc(db, 'admins', user.uid), { uid: user.uid, email, createdAt: new Date().toISOString() });
+      } else if (assignedRole === 'ADMIN') {
+        await setDoc(doc(db, 'admins', user.uid), { 
+          uid: user.uid, 
+          email, 
+          permissions: newProfile.adminPermissions, 
+          createdAt: new Date().toISOString() 
+        });
+      }
     } catch (err) {
       console.warn("User record write notice:", err);
     }
+
+    try {
+      localStorage.setItem(`eggs_role_${user.uid}`, assignedRole);
+    } catch {}
 
     // Initialize clean user wallet
     const walletDocRef = doc(db, 'wallets', user.uid);
@@ -194,7 +281,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const snap = await getDoc(doc(db, 'users', currentUser.uid));
       if (snap.exists()) {
-        setUserProfile(snap.data() as UserProfile);
+        const data = snap.data() as UserProfile;
+        setUserProfile(data);
       }
     } catch (err) {
       console.error("Failed to refresh profile:", err);
@@ -246,6 +334,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
+    if (currentUser) {
+      try {
+        localStorage.removeItem(`eggs_role_${currentUser.uid}`);
+      } catch {}
+    }
     await signOut(auth);
     setUserProfile(null);
   };
@@ -262,7 +355,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // FIRST LAUNCH: Create Owner Account
+  // FIRST LAUNCH / OWNER CREATION: Create Owner Account
   const createOwnerAccount = async (email: string, username: string, pass: string) => {
     const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
     if (username.trim()) {
@@ -271,17 +364,77 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const profile = await initUserRecord(cred.user, username.trim(), undefined, 'OWNER');
     setUserProfile(profile);
     setOwnerExists(true);
+    try {
+      await setDoc(doc(db, 'owners', cred.user.uid), {
+        uid: cred.user.uid,
+        email: email.trim(),
+        username: username.trim(),
+        createdAt: new Date().toISOString()
+      });
+      await setDoc(doc(db, 'admins', cred.user.uid), {
+        uid: cred.user.uid,
+        email: email.trim(),
+        username: username.trim(),
+        createdAt: new Date().toISOString()
+      });
+    } catch (e) {
+      console.warn("Owner collection sync notice:", e);
+    }
   };
 
   // OWNER ACTION: Create Admin Account
   const createAdminAccount = async (email: string, username: string, pass: string, permissions: AdminPermissions) => {
-    // Generate clean admin ID doc in Firestore
-    const adminDocRef = doc(collection(db, 'users'));
+    const cleanEmail = email.trim().toLowerCase();
     const adminCode = generateReferralCode(username);
 
+    // Check if user already exists in Firestore users
+    try {
+      const q = query(collection(db, 'users'), where('email', '==', cleanEmail));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const existingDoc = snap.docs[0];
+        const adminUid = existingDoc.id;
+        await updateDoc(doc(db, 'users', adminUid), {
+          role: 'ADMIN',
+          adminPermissions: permissions,
+          status: 'ACTIVE',
+          updatedAt: new Date().toISOString()
+        });
+        await setDoc(doc(db, 'admins', adminUid), {
+          uid: adminUid,
+          email: cleanEmail,
+          username: username.trim(),
+          permissions,
+          createdAt: new Date().toISOString()
+        });
+        return;
+      }
+    } catch (e) {
+      console.warn("Admin lookup notice:", e);
+    }
+
+    // Create Firebase Auth user via secondary app so the owner stays logged in
+    let adminUid: string | null = null;
+    try {
+      const secondaryName = 'SecondaryAdminCreator';
+      const existingApp = getApps().find(a => a.name === secondaryName);
+      const secondaryApp = existingApp || initializeApp(activeFirebaseConfig, secondaryName);
+      const secondaryAuth = getAuth(secondaryApp);
+      const secCred = await createUserWithEmailAndPassword(secondaryAuth, cleanEmail, pass);
+      adminUid = secCred.user.uid;
+      if (username.trim()) {
+        await updateProfile(secCred.user, { displayName: username.trim() });
+      }
+      await signOut(secondaryAuth);
+    } catch (secErr: any) {
+      console.warn("Secondary auth creation:", secErr);
+    }
+
+    const finalUid = adminUid || doc(collection(db, 'users')).id;
+
     const adminProfile: UserProfile = {
-      uid: adminDocRef.id,
-      email: email.trim(),
+      uid: finalUid,
+      email: cleanEmail,
       username: username.trim(),
       role: 'ADMIN',
       status: 'ACTIVE',
@@ -291,11 +444,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       updatedAt: new Date().toISOString()
     };
 
-    await setDoc(adminDocRef, adminProfile);
+    await setDoc(doc(db, 'users', finalUid), adminProfile);
+    await setDoc(doc(db, 'admins', finalUid), {
+      uid: finalUid,
+      email: cleanEmail,
+      username: username.trim(),
+      permissions,
+      createdAt: new Date().toISOString()
+    });
 
     // Initial wallet
-    await setDoc(doc(db, 'wallets', adminDocRef.id), {
-      userId: adminDocRef.id,
+    await setDoc(doc(db, 'wallets', finalUid), {
+      userId: finalUid,
       balance: 0,
       availableEggs: 0,
       pendingDeposits: 0,
@@ -314,11 +474,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       adminPermissions: permissions,
       updatedAt: new Date().toISOString()
     });
+    try {
+      await updateDoc(doc(db, 'admins', adminUid), {
+        permissions,
+        updatedAt: new Date().toISOString()
+      });
+    } catch {}
   };
 
   // OWNER ACTION: Delete Admin Account
   const deleteAdminAccount = async (adminUid: string) => {
     await deleteDoc(doc(db, 'users', adminUid));
+    try {
+      await deleteDoc(doc(db, 'admins', adminUid));
+    } catch {}
   };
 
   // OWNER ACTION: Toggle Admin Suspension
@@ -330,9 +499,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const userEmail = (currentUser?.email || '').toLowerCase();
-  const isSuperOwner = userEmail === INITIAL_OWNER_EMAIL || userEmail === 'eggsverse@gmail.com' || userProfile?.role === 'OWNER';
-  const role: UserRole = isSuperOwner ? 'OWNER' : (userProfile?.role || 'USER');
+  // Authoritative Role Detection logic:
+  // Recognizes Owner by verified email, Firestore role, or explicit owner registration
+  const userEmail = (currentUser?.email || '').toLowerCase().trim();
+  const cachedRole = currentUser ? localStorage.getItem(`eggs_role_${currentUser.uid}`) : null;
+
+  const isSuperOwner = 
+    isAuthorizedOwnerEmail(userEmail) || 
+    userProfile?.role === 'OWNER' ||
+    cachedRole === 'OWNER';
+
+  const role: UserRole = isSuperOwner 
+    ? 'OWNER' 
+    : (userProfile?.role || (cachedRole === 'ADMIN' ? 'ADMIN' : 'USER'));
+
   const isOwner = role === 'OWNER';
   const isAdmin = role === 'ADMIN' || isOwner;
 

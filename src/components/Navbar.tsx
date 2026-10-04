@@ -183,48 +183,55 @@ export const Navbar: React.FC<Props> = ({ currentTab, setCurrentTab, openAuthMod
               {isOwner && (
                 <button
                   onClick={() => setCurrentTab('owner')}
-                  className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm ${
+                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm ${
                     currentTab === 'owner'
                       ? 'bg-amber-500 text-slate-950 font-black'
                       : 'bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30'
                   }`}
+                  title="Owner Master Control Panel"
                 >
                   <ShieldAlert className="w-4 h-4 text-amber-400" />
-                  <span>OWNER PANEL</span>
+                  <span className="hidden xs:inline sm:inline">OWNER PANEL</span>
+                  <span className="xs:hidden sm:hidden">OWNER</span>
                 </button>
               )}
 
-              {isAdmin && (
+              {isAdmin && !isOwner && (
                 <button
                   onClick={() => setCurrentTab('admin')}
-                  className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm ${
+                  className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-sm ${
                     currentTab === 'admin'
                       ? 'bg-emerald-500 text-slate-950 font-black'
                       : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
                   }`}
+                  title="Administrator Portal"
                 >
                   <ShieldAlert className="w-4 h-4" />
-                  <span>ADMIN PANEL</span>
+                  <span className="hidden xs:inline sm:inline">ADMIN PANEL</span>
+                  <span className="xs:hidden sm:hidden">ADMIN</span>
                 </button>
               )}
-
-              {/* Mobile Menu Toggle */}
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="w-10 h-10 rounded-xl bg-emerald-900/40 border border-emerald-500/30 flex items-center justify-center text-slate-200 md:hidden"
-              >
-                {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-              </button>
             </>
           ) : (
-            <button
-              onClick={openAuthModal}
-              className="bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black px-4 py-2 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/20 transition flex items-center gap-1.5"
-            >
-              <User className="w-4 h-4" />
-              <span>Login / Register</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={openAuthModal}
+                className="bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black px-3.5 sm:px-4 py-2 rounded-xl text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/20 transition flex items-center gap-1.5"
+              >
+                <User className="w-4 h-4" />
+                <span>Login / Register</span>
+              </button>
+            </div>
           )}
+
+          {/* Mobile Menu Toggle - Always available on mobile */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="w-10 h-10 rounded-xl bg-emerald-900/40 border border-emerald-500/30 flex items-center justify-center text-slate-200 md:hidden ml-1"
+            aria-label="Toggle Navigation Menu"
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
         </div>
       </div>
 
@@ -297,6 +304,25 @@ export const Navbar: React.FC<Props> = ({ currentTab, setCurrentTab, openAuthMod
               <ShieldAlert className="w-4 h-4 text-slate-950" />
               <span>Open ADMIN Panel (/admin)</span>
             </button>
+          )}
+
+          {!currentUser && (
+            <div className="pt-2 border-t border-slate-800 space-y-1.5">
+              <button
+                onClick={() => { setCurrentTab('owner'); setMobileMenuOpen(false); }}
+                className="w-full p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 font-bold text-xs flex items-center justify-center gap-2 hover:bg-amber-500/20 transition"
+              >
+                <ShieldAlert className="w-4 h-4 text-amber-400" />
+                <span>Owner Master Portal (/owner)</span>
+              </button>
+              <button
+                onClick={() => { setCurrentTab('admin'); setMobileMenuOpen(false); }}
+                className="w-full p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-bold text-xs flex items-center justify-center gap-2 hover:bg-emerald-500/20 transition"
+              >
+                <ShieldAlert className="w-4 h-4 text-emerald-400" />
+                <span>Administrator Portal (/admin)</span>
+              </button>
+            </div>
           )}
 
           {currentUser && (

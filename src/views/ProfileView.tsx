@@ -9,15 +9,22 @@ import {
   AlertCircle,
   Copy,
   Check,
-  Shield
+  Shield,
+  Crown,
+  ShieldAlert,
+  ArrowRight
 } from 'lucide-react';
 import { updatePassword, updateProfile } from 'firebase/auth';
 import { useAuth } from '../context/AuthContext';
 import { useFarm } from '../context/FarmContext';
 import { DisclaimerBanner } from '../components/DisclaimerBanner';
 
-export const ProfileView: React.FC = () => {
-  const { currentUser, userProfile, role, logout } = useAuth();
+interface Props {
+  setCurrentTab?: (tab: string) => void;
+}
+
+export const ProfileView: React.FC<Props> = ({ setCurrentTab }) => {
+  const { currentUser, userProfile, role, isOwner, isAdmin, logout } = useAuth();
   const { wallet } = useFarm();
 
   const [newUsername, setNewUsername] = useState(userProfile?.username || '');
@@ -126,6 +133,62 @@ export const ProfileView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Administrative Access Portal (Visible for Owner & Admin) */}
+      {(isOwner || isAdmin) && setCurrentTab && (
+        <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-amber-500/40 rounded-3xl p-6 shadow-xl space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                <Crown className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-white font-['Outfit']">Administrative Workspace</h3>
+                <p className="text-xs text-amber-400/80 font-medium">Privileged Management & Operational Controls</p>
+              </div>
+            </div>
+            <span className="text-[10px] bg-amber-500/20 text-amber-300 font-black px-2.5 py-1 rounded-full uppercase border border-amber-500/40">
+              {role} ACCESS
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+            {isOwner && (
+              <button
+                type="button"
+                onClick={() => setCurrentTab('owner')}
+                className="w-full p-4 rounded-2xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 hover:from-amber-400 hover:to-amber-600 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-between shadow-lg shadow-amber-500/20 transition active:scale-95"
+              >
+                <div className="flex items-center gap-2.5 text-left">
+                  <Crown className="w-5 h-5" />
+                  <div>
+                    <span className="block font-black text-sm">OWNER MASTER PANEL</span>
+                    <span className="text-[10px] font-semibold text-slate-900 opacity-90 normal-case">Full system authority, 50 plans & financials</span>
+                  </div>
+                </div>
+                <ArrowRight className="w-5 h-5 shrink-0" />
+              </button>
+            )}
+
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setCurrentTab('admin')}
+                className="w-full p-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs uppercase tracking-wider flex items-center justify-between shadow-lg shadow-emerald-500/20 transition active:scale-95"
+              >
+                <div className="flex items-center gap-2.5 text-left">
+                  <ShieldAlert className="w-5 h-5" />
+                  <div>
+                    <span className="block font-black text-sm">ADMINISTRATOR PORTAL</span>
+                    <span className="text-[10px] font-semibold text-slate-900 opacity-90 normal-case">Approve deposits, withdrawals & users</span>
+                  </div>
+                </div>
+                <ArrowRight className="w-5 h-5 shrink-0" />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Profile Edit Form */}
       <div className="bg-slate-900/90 border border-emerald-500/30 rounded-3xl p-6 sm:p-7 shadow-xl space-y-5">

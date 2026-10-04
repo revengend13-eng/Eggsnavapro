@@ -1,6 +1,7 @@
 import React from 'react';
-import { Home, ShoppingBag, Layers, Wallet, Users, Sparkles } from 'lucide-react';
+import { Home, ShoppingBag, Layers, Wallet, Users, Sparkles, Crown, ShieldAlert } from 'lucide-react';
 import { useFarm } from '../context/FarmContext';
+import { useAuth } from '../context/AuthContext';
 import { EggIllustration } from './FarmIllustrations';
 
 interface Props {
@@ -10,13 +11,20 @@ interface Props {
 
 export const BottomNav: React.FC<Props> = ({ currentTab, setCurrentTab }) => {
   const { availableHarvestCount } = useFarm();
+  const { isOwner, isAdmin } = useAuth();
 
   const navItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'plans', label: 'Buy Hens', icon: ShoppingBag },
     { id: 'collect', label: 'Harvest', isCenter: true },
     { id: 'my-farm', label: 'My Farm', icon: Layers },
-    { id: 'deposit', label: 'Wallet', icon: Wallet },
+    ...(isOwner 
+      ? [{ id: 'owner', label: 'Owner', icon: Crown, highlight: true }]
+      : (isAdmin 
+        ? [{ id: 'admin', label: 'Admin', icon: ShieldAlert, highlight: true }]
+        : [{ id: 'deposit', label: 'Wallet', icon: Wallet }]
+      )
+    ),
   ];
 
   return (
@@ -55,17 +63,18 @@ export const BottomNav: React.FC<Props> = ({ currentTab, setCurrentTab }) => {
           }
 
           const IconComponent = item.icon!;
+          const isSpecial = (item as any).highlight;
           return (
             <button
               key={item.id}
               onClick={() => setCurrentTab(item.id)}
               className={`flex flex-col items-center justify-center py-1 px-2.5 rounded-xl transition ${
                 isActive 
-                  ? 'text-emerald-400 font-bold' 
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? (isSpecial ? 'text-amber-400 font-black scale-105' : 'text-emerald-400 font-bold')
+                  : (isSpecial ? 'text-amber-400/80 font-bold hover:text-amber-300' : 'text-slate-400 hover:text-slate-200')
               }`}
             >
-              <IconComponent className={`w-5 h-5 mb-0.5 ${isActive ? 'stroke-[2.5]' : 'stroke-2'}`} />
+              <IconComponent className={`w-5 h-5 mb-0.5 ${isActive ? 'stroke-[2.5]' : 'stroke-2'} ${isSpecial && !isActive ? 'text-amber-400' : ''}`} />
               <span className="text-[10px] tracking-tight">{item.label}</span>
             </button>
           );

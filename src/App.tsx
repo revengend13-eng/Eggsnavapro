@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuthProvider, useAuth, isAuthorizedOwnerEmail } from './context/AuthContext';
 import { FarmProvider, useFarm } from './context/FarmContext';
+import { auth } from './firebase';
 import { Navbar } from './components/Navbar';
 import { BottomNav } from './components/BottomNav';
 import { AuthModal } from './components/AuthModal';
@@ -36,20 +37,22 @@ const MainAppContent: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const ref = params.get('ref');
-    const path = window.location.pathname;
+    const path = window.location.pathname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    const tabParam = params.get('tab')?.toLowerCase();
 
     if (ref) {
       setRefCode(ref.toUpperCase());
       setAuthMode('register');
       setAuthModalOpen(true);
-    } else if (path.includes('/owner/login') || path.includes('/owner')) {
+    } else if (tabParam === 'owner' || path.includes('/owner') || hash.includes('owner')) {
       setCurrentTab('owner');
-    } else if (path.includes('/admin')) {
+    } else if (tabParam === 'admin' || path.includes('/admin') || hash.includes('admin')) {
       setCurrentTab('admin');
-    } else if (path.includes('/user/register')) {
+    } else if (path.includes('/user/register') || hash.includes('register')) {
       setAuthMode('register');
       setAuthModalOpen(true);
-    } else if (path.includes('/user/login')) {
+    } else if (path.includes('/user/login') || hash.includes('login')) {
       setAuthMode('login');
       setAuthModalOpen(true);
     }
@@ -62,7 +65,8 @@ const MainAppContent: React.FC = () => {
 
   const handleAuthSuccess = () => {
     // Role-based redirection after login
-    if (role === 'OWNER') {
+    const email = (auth.currentUser?.email || '').toLowerCase().trim();
+    if (isAuthorizedOwnerEmail(email) || role === 'OWNER') {
       setCurrentTab('owner');
     } else if (role === 'ADMIN') {
       setCurrentTab('admin');
@@ -113,7 +117,7 @@ const MainAppContent: React.FC = () => {
           <HistoryView />
         )}
         {currentTab === 'profile' && (
-          <ProfileView />
+          <ProfileView setCurrentTab={setCurrentTab} />
         )}
         {currentTab === 'support' && (
           <SupportView />
@@ -151,6 +155,7 @@ const MainAppContent: React.FC = () => {
         initialRefCode={refCode}
         onClose={() => setAuthModalOpen(false)}
         onSuccess={handleAuthSuccess}
+        onNavigatePortal={(portal) => setCurrentTab(portal)}
       />
     </div>
   );

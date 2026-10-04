@@ -8,7 +8,7 @@ import {
   Shield,
   CheckCircle2
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, isAuthorizedOwnerEmail } from '../context/AuthContext';
 
 interface Props {
   onSuccess: () => void;
@@ -37,7 +37,7 @@ export const AdminLoginView: React.FC<Props> = ({ onSuccess, onNavigateHome, onN
 
     try {
       const profile = await loginWithEmail(email.trim(), password);
-      if (profile.role === 'ADMIN' || profile.role === 'OWNER') {
+      if (profile.role === 'ADMIN' || profile.role === 'OWNER' || isAuthorizedOwnerEmail(email)) {
         onSuccess();
       } else {
         setError('Access Denied: This account does not possess Administrator privileges. Please contact the Owner.');

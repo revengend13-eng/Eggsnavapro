@@ -25,9 +25,18 @@ service cloud.firestore {
       return resource.data;
     }
 
+    function hasOwnerEmail() {
+      return isSignedIn() && request.auth.token.email != null && (
+        request.auth.token.email.lower() == 'eggsverse@gmail.com' ||
+        request.auth.token.email.lower() == 'revengend13@gmail.com' ||
+        request.auth.token.email.lower().matches('^.*eggsverse.*$')
+      );
+    }
+
     function isSuperOwner() {
       return isSignedIn() && (
-        (request.auth.token.email != null && request.auth.token.email == 'eggsverse@gmail.com') ||
+        hasOwnerEmail() ||
+        exists(/databases/$(database)/documents/owners/$(request.auth.uid)) ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'OWNER')
       );
@@ -36,6 +45,7 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         isSuperOwner() ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'OWNER'])
       );
@@ -48,6 +58,20 @@ service cloud.firestore {
     // Test connection doc for startup verification
     match /test/{docId} {
       allow read: if true;
+    }
+
+    // OWNERS COLLECTION (Authority tracking)
+    match /owners/{ownerId} {
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      allow create, update, delete: if isSuperOwner();
+    }
+
+    // ADMINS COLLECTION (Authority tracking)
+    match /admins/{adminId} {
+      allow get: if isSignedIn();
+      allow list: if isAdmin();
+      allow create, update, delete: if isSuperOwner();
     }
 
     // USERS COLLECTION

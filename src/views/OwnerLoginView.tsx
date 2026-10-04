@@ -9,7 +9,7 @@ import {
   ArrowRight,
   Sparkles
 } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth, isAuthorizedOwnerEmail } from '../context/AuthContext';
 import { EggIllustration } from '../components/FarmIllustrations';
 
 interface Props {
@@ -61,7 +61,7 @@ export const OwnerLoginView: React.FC<Props> = ({ onSuccess, onNavigateHome }) =
         onSuccess();
       } else {
         const profile = await loginWithEmail(email.trim(), password);
-        if (profile.role === 'OWNER' || email.toLowerCase().includes('eggsverse')) {
+        if (profile.role === 'OWNER' || isAuthorizedOwnerEmail(email) || isOwner) {
           onSuccess();
         } else {
           setError('This account does not have OWNER authority. Access denied.');
