@@ -63,10 +63,13 @@ export type UserPlanStatus = 'PENDING' | 'ACTIVE' | 'COMPLETED' | 'EXPIRED';
 export interface UserPlan {
   id: string;
   userId: string;
+  uid?: string;
   userEmail?: string;
   userName?: string;
   planId: string;
+  planNumber?: number;
   planName: string;
+  price?: number;
   purchasePrice: number;
   cycleDays: number;
   dailyEggs: number;
@@ -82,7 +85,9 @@ export interface UserPlan {
   henImage?: string;
   eggImage?: string;
   henQuantity?: number;
+  hens?: number;
   depositId?: string;
+  paymentId?: string;
   createdAt?: string;
   activatedAt?: string;
   deactivatedAt?: string;
@@ -121,6 +126,7 @@ export type DepositStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export interface DepositRequest {
   id: string;
   userId: string;
+  uid?: string;
   userEmail: string;
   userName: string;
   amount: number;
@@ -133,6 +139,7 @@ export interface DepositRequest {
   approvedBy?: string;
   rejectionReason?: string;
   planId?: string;
+  planNumber?: number;
   planName?: string;
   userPlanId?: string;
   createdAt: string;

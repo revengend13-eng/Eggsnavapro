@@ -55,7 +55,8 @@ interface FarmContextType {
     notes?: string,
     userPlanId?: string,
     planId?: string,
-    planName?: string
+    planName?: string,
+    planNumber?: number
   ) => Promise<{ success: boolean; message: string }>;
   submitWithdrawal: (
     amount: number, 
@@ -495,15 +496,49 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       const nowIso = new Date().toISOString();
-      const newUserPlanRef = doc(collection(db, 'userPlans'));
       const henCount = plan.henQuantity || plan.planNumber;
+      
+      // Check if user already has an unlinked PENDING reservation for this exact plan
+      const existingPending = userPlans.find(p => 
+        p.userId === currentUser.uid && 
+        p.planId === plan.id && 
+        p.status === 'PENDING' && 
+        (!p.depositId || p.depositId === '')
+      );
+
+      if (existingPending) {
+        // Refresh timestamps and ensure all fields are set
+        const existingRef = doc(db, 'userPlans', existingPending.id);
+        await updateDoc(existingRef, {
+          uid: currentUser.uid,
+          planNumber: plan.planNumber,
+          price: plan.price,
+          purchasePrice: plan.price,
+          hens: henCount,
+          henQuantity: henCount,
+          dailyEggs: plan.dailyEggs,
+          eggValuePkr: plan.eggValuePkr || 40,
+          updatedAt: nowIso
+        });
+
+        return {
+          success: true,
+          userPlanId: existingPending.id,
+          message: `Flock ${plan.name} selected! Please submit your deposit to activate this flock.`
+        };
+      }
+
+      const newUserPlanRef = doc(collection(db, 'userPlans'));
       const pendingUserPlan: UserPlan = {
         id: newUserPlanRef.id,
         userId: currentUser.uid,
+        uid: currentUser.uid,
         userEmail: currentUser.email || '',
         userName: userProfile?.username || 'Farmer',
         planId: plan.id,
+        planNumber: plan.planNumber,
         planName: plan.name,
+        price: plan.price,
         purchasePrice: plan.price,
         cycleDays: plan.cycleDays || 60,
         dailyEggs: plan.dailyEggs,
@@ -519,7 +554,11 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
         henImage: plan.henImage || '',
         eggImage: plan.eggImage || '',
         henQuantity: henCount,
-        createdAt: nowIso
+        hens: henCount,
+        depositId: '',
+        paymentId: '',
+        createdAt: nowIso,
+        updatedAt: nowIso
       };
 
       await setDoc(newUserPlanRef, pendingUserPlan);
@@ -673,7 +712,8 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
     notes?: string,
     userPlanId?: string,
     planId?: string,
-    planName?: string
+    planName?: string,
+    planNumber?: number
   ): Promise<{ success: boolean; message: string }> => {
     if (!currentUser || !wallet) {
       return { success: false, message: 'Please log in to submit a deposit.' };
@@ -698,9 +738,26 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const nowIso = new Date().toISOString();
       const depRef = doc(collection(db, 'deposits'));
 
+      // If userPlanId not passed, auto-link to any unlinked pending userPlan
+      let effectiveUserPlanId = userPlanId;
+      let effectivePlanId = planId;
+      let effectivePlanName = planName;
+      let effectivePlanNumber = planNumber;
+
+      if (!effectiveUserPlanId) {
+        const pendingPlan = userPlans.find(p => p.userId === currentUser.uid && p.status === 'PENDING' && (!p.depositId || p.depositId === ''));
+        if (pendingPlan) {
+          effectiveUserPlanId = pendingPlan.id;
+          effectivePlanId = pendingPlan.planId;
+          effectivePlanName = pendingPlan.planName;
+          effectivePlanNumber = pendingPlan.planNumber;
+        }
+      }
+
       const depositData: DepositRequest = {
         id: depRef.id,
         userId: currentUser.uid,
+        uid: currentUser.uid,
         userEmail: currentUser.email || '',
         userName: userProfile?.username || 'User',
         amount,
@@ -711,17 +768,23 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
         notes: notes || '',
         status: 'PENDING',
         createdAt: nowIso,
-        ...(userPlanId ? { userPlanId, planId, planName } : {})
+        ...(effectiveUserPlanId ? { 
+          userPlanId: effectiveUserPlanId, 
+          planId: effectivePlanId, 
+          planName: effectivePlanName,
+          planNumber: effectivePlanNumber
+        } : {})
       };
 
       const batch = writeBatch(db);
       batch.set(depRef, depositData);
 
       // If linked to a pending user plan, link depositId on the user plan document
-      if (userPlanId) {
-        const uPlanRef = doc(db, 'userPlans', userPlanId);
+      if (effectiveUserPlanId) {
+        const uPlanRef = doc(db, 'userPlans', effectiveUserPlanId);
         batch.update(uPlanRef, {
           depositId: depRef.id,
+          paymentId: depRef.id,
           updatedAt: nowIso
         });
       }
@@ -743,7 +806,7 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
         direction: 'CREDIT',
         status: 'PENDING',
         referenceId: depRef.id,
-        description: `Deposit request via ${method} (TID: ${txId})${planName ? ` for ${planName}` : ''}`,
+        description: `Deposit request via ${method} (TID: ${txId.trim()})${effectivePlanName ? ` for ${effectivePlanName}` : ''}`,
         createdAt: nowIso
       });
 
@@ -751,8 +814,8 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return { 
         success: true, 
-        message: userPlanId 
-          ? `Deposit request submitted for ${planName || 'your plan'}! Your flock will automatically activate once confirmed by our audit team.` 
+        message: effectiveUserPlanId 
+          ? `Deposit request submitted for ${effectivePlanName || 'your plan'}! Your flock will automatically activate once confirmed by our audit team.` 
           : 'Deposit request submitted successfully! Funds will reflect in your wallet once verified by our audit team.' 
       };
     } catch (e: any) {
