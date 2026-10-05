@@ -57,11 +57,13 @@
     },
     "UserPlan": {
       "title": "UserPlan",
-      "description": "Active flock owned by an individual user",
+      "description": "Flock instance owned by an individual user (pending or active)",
       "type": "object",
       "properties": {
         "id": { "type": "string", "maxLength": 128 },
         "userId": { "type": "string", "maxLength": 128 },
+        "userEmail": { "type": "string", "maxLength": 256 },
+        "userName": { "type": "string", "maxLength": 64 },
         "planId": { "type": "string", "maxLength": 64 },
         "planName": { "type": "string", "maxLength": 128 },
         "purchasePrice": { "type": "number" },
@@ -72,7 +74,11 @@
         "lastCollectedAt": { "type": "string" },
         "startDate": { "type": "string" },
         "endDate": { "type": "string" },
-        "status": { "type": "string", "enum": ["ACTIVE", "COMPLETED", "EXPIRED"] }
+        "status": { "type": "string", "enum": ["PENDING", "ACTIVE", "COMPLETED", "EXPIRED"] },
+        "henQuantity": { "type": "number" },
+        "depositId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "activatedAt": { "type": "string" }
       },
       "required": ["id", "userId", "planId", "planName", "purchasePrice", "status"]
     },
@@ -112,6 +118,9 @@
         "status": { "type": "string", "enum": ["PENDING", "APPROVED", "REJECTED"] },
         "approvedBy": { "type": "string", "maxLength": 128 },
         "rejectionReason": { "type": "string", "maxLength": 256 },
+        "planId": { "type": "string", "maxLength": 64 },
+        "planName": { "type": "string", "maxLength": 128 },
+        "userPlanId": { "type": "string", "maxLength": 128 },
         "createdAt": { "type": "string" },
         "reviewedAt": { "type": "string" }
       },

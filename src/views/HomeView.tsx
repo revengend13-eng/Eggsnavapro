@@ -38,6 +38,7 @@ export const HomeView: React.FC<Props> = ({ setCurrentTab, openAuthModal }) => {
   } = useFarm();
 
   const starterPlan = plans.find(p => p.id === 'plan_01') || plans[0];
+  const pendingPlans = userPlans.filter(p => p.status === 'PENDING');
 
   return (
     <div className="space-y-5 pb-20 max-w-7xl mx-auto px-4 sm:px-6">
@@ -128,8 +129,17 @@ export const HomeView: React.FC<Props> = ({ setCurrentTab, openAuthModal }) => {
         </div>
 
         {/* Pending Ledger Indicators if any */}
-        {((wallet?.pendingDeposits || 0) > 0 || (wallet?.pendingWithdrawals || 0) > 0) && (
+        {((wallet?.pendingDeposits || 0) > 0 || (wallet?.pendingWithdrawals || 0) > 0 || pendingPlans.length > 0) && (
           <div className="mt-5 pt-4 border-t border-emerald-500/20 flex flex-wrap gap-4 text-xs">
+            {pendingPlans.length > 0 && (
+              <button 
+                onClick={() => setCurrentTab('my-farm')}
+                className="flex items-center gap-2 text-amber-300 bg-amber-950/40 hover:bg-amber-950/70 px-3 py-1 rounded-lg border border-amber-500/30 transition text-left"
+              >
+                <Clock className="w-3.5 h-3.5 animate-spin text-amber-400" />
+                <span>{pendingPlans.length} Flock Reservation{pendingPlans.length > 1 ? 's' : ''} Awaiting Activation</span>
+              </button>
+            )}
             {(wallet?.pendingDeposits || 0) > 0 && (
               <div className="flex items-center gap-2 text-amber-300 bg-amber-950/40 px-3 py-1 rounded-lg border border-amber-500/30">
                 <Clock className="w-3.5 h-3.5 animate-spin" />
@@ -198,7 +208,7 @@ export const HomeView: React.FC<Props> = ({ setCurrentTab, openAuthModal }) => {
       {/* Quick Navigation 6-Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
-          { id: 'plans', title: 'Buy Hens', subtitle: '30 Flock Plans', icon: ShoppingBag, color: 'from-amber-500/20 to-amber-600/10 border-amber-500/30 text-amber-400' },
+          { id: 'plans', title: 'Buy Hens', subtitle: '50 Flock Plans', icon: ShoppingBag, color: 'from-amber-500/20 to-amber-600/10 border-amber-500/30 text-amber-400' },
           { id: 'my-farm', title: 'My Farm', subtitle: `${activeHensCount} Active Coops`, icon: Layers, color: 'from-emerald-500/20 to-emerald-600/10 border-emerald-500/30 text-emerald-400' },
           { id: 'collect', title: 'Collect Eggs', subtitle: `${availableHarvestCount} Harvestable`, icon: Sparkles, color: 'from-teal-500/20 to-teal-600/10 border-teal-500/30 text-teal-300' },
           { id: 'deposit', title: 'Deposit PKR', subtitle: 'Easypaisa / JazzCash', icon: ArrowDownLeft, color: 'from-blue-500/20 to-blue-600/10 border-blue-500/30 text-blue-400' },

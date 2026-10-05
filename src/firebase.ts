@@ -17,40 +17,16 @@ import {
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
-// Strictly enforce eggs-nava-pro project configuration and sanitize any stale environment variables
-const sanitizeProjectConfig = () => {
-  const envProjectId = import.meta.env.VITE_FIREBASE_PROJECT_ID;
-  const envAuthDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN;
-  const envAppId = import.meta.env.VITE_FIREBASE_APP_ID;
-  const envStorageBucket = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET;
-  const envSenderId = import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID;
-  const envApiKey = import.meta.env.VITE_FIREBASE_API_KEY;
-  const envDbId = import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID;
-
-  return {
-    projectId: (envProjectId && !envProjectId.includes('eggsverse')) 
-      ? envProjectId 
-      : (firebaseConfig.projectId || 'eggs-nava-pro'),
-    authDomain: (envAuthDomain && !envAuthDomain.includes('eggsverse')) 
-      ? envAuthDomain 
-      : (firebaseConfig.authDomain || 'eggs-nava-pro.firebaseapp.com'),
-    appId: (envAppId && !envAppId.includes('1081536876093')) 
-      ? envAppId 
-      : (firebaseConfig.appId || '1:423117403168:web:290b732836a309193ab845'),
-    apiKey: (envApiKey && !envApiKey.includes('AIzaSyA3gaA2yOzZfXPpT88kFnLcqLH5pqBDF3s'))
-      ? envApiKey
-      : (firebaseConfig.apiKey || 'AIzaSyA8PaCWSuzu2DaJlfyGH65GQggVg_6LXPE'),
-    firestoreDatabaseId: envDbId || firebaseConfig.firestoreDatabaseId || 'ai-studio-0c5fe44a-5202-455c-a321-28dbfa30fdd6',
-    storageBucket: (envStorageBucket && !envStorageBucket.includes('eggsverse')) 
-      ? envStorageBucket 
-      : (firebaseConfig.storageBucket || 'eggs-nava-pro.firebasestorage.app'),
-    messagingSenderId: (envSenderId && envSenderId !== '1081536876093') 
-      ? envSenderId 
-      : (firebaseConfig.messagingSenderId || '423117403168'),
-  };
+// Strictly enforce verified eggs-nava-pro project configuration
+export const activeFirebaseConfig = {
+  projectId: firebaseConfig.projectId || 'eggs-nava-pro',
+  authDomain: firebaseConfig.authDomain || 'eggs-nava-pro.firebaseapp.com',
+  appId: firebaseConfig.appId || '1:423117403168:web:290b732836a309193ab845',
+  apiKey: firebaseConfig.apiKey || 'AIzaSyA8PaCWSuzu2DaJlfyGH65GQggVg_6LXPE',
+  firestoreDatabaseId: firebaseConfig.firestoreDatabaseId || 'ai-studio-0c5fe44a-5202-455c-a321-28dbfa30fdd6',
+  storageBucket: firebaseConfig.storageBucket || 'eggs-nava-pro.firebasestorage.app',
+  messagingSenderId: firebaseConfig.messagingSenderId || '423117403168',
 };
-
-export const activeFirebaseConfig = sanitizeProjectConfig();
 
 // Initialize Firebase with verified eggs-nava-pro configuration
 const app = initializeApp(activeFirebaseConfig);

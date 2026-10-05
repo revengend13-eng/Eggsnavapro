@@ -24,7 +24,7 @@ interface Props {
 
 export const PlansView: React.FC<Props> = ({ setCurrentTab, openAuthModal }) => {
   const { currentUser } = useAuth();
-  const { plans, wallet, buyPlan } = useFarm();
+  const { plans, wallet, buyPlan, createPendingUserPlan } = useFarm();
 
   const [selectedPlan, setSelectedPlan] = useState<HenPlan | null>(null);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -54,7 +54,59 @@ export const PlansView: React.FC<Props> = ({ setCurrentTab, openAuthModal }) => 
     return true;
   });
 
-  const handleBuy = async () => {
+  const handlePayViaDeposit = async () => {
+    if (!currentUser) {
+      openAuthModal();
+      return;
+    }
+
+    if (!selectedPlan) return;
+
+    if (!agreedToTerms) {
+      setPurchaseStatus({
+        type: 'error',
+        message: 'Please accept the digital farm rules and terms before proceeding.'
+      });
+      return;
+    }
+
+    setBuying(true);
+    setPurchaseStatus(null);
+
+    const result = await createPendingUserPlan(selectedPlan);
+
+    if (result.success && result.userPlanId) {
+      // Store in sessionStorage so DepositView picks it up directly
+      sessionStorage.setItem('pending_deposit_plan', JSON.stringify({
+        userPlanId: result.userPlanId,
+        planId: selectedPlan.id,
+        planName: selectedPlan.name,
+        price: selectedPlan.price,
+        henQuantity: selectedPlan.henQuantity || selectedPlan.planNumber,
+        dailyEggs: selectedPlan.dailyEggs
+      }));
+
+      setPurchaseStatus({
+        type: 'success',
+        message: `${selectedPlan.name} reserved! Redirecting to deposit portal...`
+      });
+
+      setTimeout(() => {
+        setSelectedPlan(null);
+        setAgreedToTerms(false);
+        setPurchaseStatus(null);
+        setCurrentTab('deposit');
+      }, 1000);
+    } else {
+      setPurchaseStatus({
+        type: 'error',
+        message: result.message
+      });
+    }
+    setBuying(false);
+  };
+
+  const handleBuyWithBalance = async () => {
     if (!currentUser) {
       openAuthModal();
       return;
@@ -85,7 +137,7 @@ export const PlansView: React.FC<Props> = ({ setCurrentTab, openAuthModal }) => 
         setAgreedToTerms(false);
         setPurchaseStatus(null);
         setCurrentTab('my-farm');
-      }, 1800);
+      }, 1500);
     } else {
       setPurchaseStatus({
         type: 'error',
@@ -380,23 +432,40 @@ export const PlansView: React.FC<Props> = ({ setCurrentTab, openAuthModal }) => 
               </div>
             )}
 
-            {/* Buttons */}
-            <div className="flex gap-3">
+            {/* Action Buttons */}
+            <div className="space-y-2.5">
+              {/* Pay via Deposit button (Primary flow for purchasing plans) */}
+              <button
+                type="button"
+                onClick={handlePayViaDeposit}
+                disabled={buying || !agreedToTerms}
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-500 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-black uppercase tracking-wider shadow-lg shadow-emerald-500/20 transition flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>
+                  {buying ? 'Reserving Flock...' : `Select & Pay via Deposit (${selectedPlan.price.toLocaleString()} PKR)`}
+                </span>
+              </button>
+
+              {/* Instant Buy with confirmed balance if available */}
+              {(wallet?.balance || 0) >= selectedPlan.price && (
+                <button
+                  type="button"
+                  onClick={handleBuyWithBalance}
+                  disabled={buying || !agreedToTerms}
+                  className="w-full py-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-emerald-500/30 text-emerald-300 text-xs font-bold transition flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Instant Buy with Wallet Balance ({(wallet?.balance || 0).toLocaleString()} PKR Available)</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => setSelectedPlan(null)}
-                className="flex-1 px-4 py-3 rounded-2xl border border-slate-700 text-slate-300 hover:bg-slate-800 text-xs font-bold transition"
+                className="w-full py-2 rounded-xl text-slate-400 hover:text-white text-xs font-bold transition"
               >
                 Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleBuy}
-                disabled={buying || (wallet?.balance || 0) < selectedPlan.price || !agreedToTerms}
-                className="flex-1 px-4 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 text-xs font-black uppercase tracking-wider shadow-lg shadow-emerald-500/20 transition flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>{buying ? 'Activating Flock...' : 'BUY NOW'}</span>
               </button>
             </div>
           </div>

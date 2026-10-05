@@ -40,11 +40,13 @@ import {
   HenPlan
 } from '../types';
 import { HenIllustration, EggIllustration } from '../components/FarmIllustrations';
+import { UserPlansManager } from '../components/UserPlansManager';
 
 export const AdminView: React.FC = () => {
   const { currentUser, userProfile, isOwner } = useAuth();
   const { 
     plans,
+    allUserPlans,
     allDeposits, 
     allWithdrawals, 
     transactions, 
@@ -68,7 +70,7 @@ export const AdminView: React.FC = () => {
     canViewReferrals: true
   });
 
-  const [activeTab, setActiveTab] = useState<'deposits' | 'withdrawals' | 'users' | 'transactions' | 'plans' | 'referrals'>('deposits');
+  const [activeTab, setActiveTab] = useState<'deposits' | 'withdrawals' | 'users' | 'transactions' | 'plans' | 'user-plans' | 'referrals'>('deposits');
 
   // Filter states
   const [depositFilter, setDepositFilter] = useState<'ALL' | 'PENDING' | 'APPROVED' | 'REJECTED'>('PENDING');
@@ -328,6 +330,23 @@ export const AdminView: React.FC = () => {
           <span>Plans Overview (50)</span>
         </button>
 
+        <button
+          onClick={() => setActiveTab('user-plans')}
+          className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center gap-2 shrink-0 ${
+            activeTab === 'user-plans'
+              ? 'bg-emerald-500 text-slate-950 font-black shadow-lg shadow-emerald-500/20'
+              : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          <span>User Purchased Plans ({allUserPlans.length})</span>
+          {allUserPlans.filter(p => p.status === 'PENDING').length > 0 && (
+            <span className="bg-amber-400 text-slate-950 text-[9px] font-black px-1.5 py-0.2 rounded-full animate-pulse">
+              {allUserPlans.filter(p => p.status === 'PENDING').length} Pending
+            </span>
+          )}
+        </button>
+
         {perms.canViewReferrals && (
           <button
             onClick={() => setActiveTab('referrals')}
@@ -421,6 +440,13 @@ export const AdminView: React.FC = () => {
 
                       <div className="text-xs text-slate-300 space-y-0.5">
                         <p><strong>Farmer:</strong> {dep.userName || 'User'} ({dep.userEmail})</p>
+                        {dep.planName && (
+                          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[11px] font-bold my-1">
+                            <span>🐔 Linked Plan:</span>
+                            <span className="font-black text-white">{dep.planName}</span>
+                            <span className="text-[10px] text-emerald-400 font-extrabold uppercase tracking-wider bg-emerald-950 px-1.5 py-0.5 rounded border border-emerald-500/30">Auto-Activates</span>
+                          </div>
+                        )}
                         <p><strong>Sender Phone / Acct:</strong> <span className="font-mono text-emerald-400">{dep.senderAccount}</span></p>
                         <p><strong>Transaction ID (TID):</strong> <span className="font-mono text-amber-400 font-bold bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">{dep.transactionId}</span></p>
                         {dep.notes && <p className="text-slate-400 italic">"{dep.notes}"</p>}
@@ -446,7 +472,7 @@ export const AdminView: React.FC = () => {
                             className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase flex items-center gap-1 shadow-lg shadow-emerald-500/20 transition active:scale-95"
                           >
                             <Check className="w-4 h-4" />
-                            <span>Approve</span>
+                            <span>{dep.planName || dep.userPlanId ? 'Approve & Activate Flock' : 'Approve'}</span>
                           </button>
                           <button
                             onClick={() => setRejectingItem({ type: 'deposit', item: dep })}
@@ -852,6 +878,21 @@ export const AdminView: React.FC = () => {
         </div>
       )}
 
+      {/* USER PURCHASED PLANS MANAGEMENT TAB */}
+      {activeTab === 'user-plans' && (
+        <div className="bg-slate-900/90 border border-emerald-500/30 rounded-3xl p-6 shadow-xl space-y-4">
+          <div className="pb-2 border-b border-slate-800">
+            <h3 className="text-lg font-black text-white font-['Outfit']">
+              User Purchased Plans & Roost Management
+            </h3>
+            <p className="text-xs text-slate-400">
+              Audit all user flocks: view pending/active/expired plans, activate or deactivate roosts, edit plan status/hens/dates, and inspect linked deposits.
+            </p>
+          </div>
+          <UserPlansManager />
+        </div>
+      )}
+
       {/* USER DETAILS MODAL */}
       {selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto">
@@ -918,25 +959,9 @@ export const AdminView: React.FC = () => {
                 <div className="space-y-2">
                   <h5 className="font-black text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
                     <Layers className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Active Coops & Flocks ({selectedUserPlans.length})</span>
+                    <span>User Purchased Plans & Roosts</span>
                   </h5>
-                  {selectedUserPlans.length === 0 ? (
-                    <p className="text-slate-500 italic text-[11px]">No active roosts acquired yet.</p>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {selectedUserPlans.map(flock => (
-                        <div key={flock.id} className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 flex items-center justify-between">
-                          <div>
-                            <span className="font-bold text-white block">{flock.planName}</span>
-                            <span className="text-[10px] text-slate-400">{flock.dailyEggs} Eggs/Day • {flock.cycleDays} Days</span>
-                          </div>
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-500/20">
-                            {flock.status}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <UserPlansManager filterUserId={selectedUser.uid} />
                 </div>
 
                 {/* Deposits by this user */}

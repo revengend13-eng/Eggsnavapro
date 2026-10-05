@@ -9,7 +9,11 @@ import {
   ShieldCheck, 
   FileText,
   UploadCloud,
-  ChevronRight
+  ChevronRight,
+  ShoppingBag,
+  Sparkles,
+  Layers,
+  X
 } from 'lucide-react';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -26,7 +30,7 @@ interface Props {
 
 export const DepositView: React.FC<Props> = ({ setCurrentTab, openAuthModal }) => {
   const { currentUser } = useAuth();
-  const { settings, submitDeposit } = useFarm();
+  const { settings, submitDeposit, userPlans, plans, createPendingUserPlan } = useFarm();
 
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('EASYPAISA');
   const [amount, setAmount] = useState<string>('500');
@@ -35,12 +39,37 @@ export const DepositView: React.FC<Props> = ({ setCurrentTab, openAuthModal }) =
   const [proofUrl, setProofUrl] = useState<string>('');
   const [notes, setNotes] = useState<string>('');
 
+  // Linked plan for activation
+  const [linkedPlan, setLinkedPlan] = useState<{
+    userPlanId?: string;
+    planId: string;
+    planName: string;
+    price: number;
+    henQuantity?: number;
+  } | null>(null);
+
   const [copiedNumber, setCopiedNumber] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // User's own deposit requests history
   const [myDeposits, setMyDeposits] = useState<DepositRequest[]>([]);
+
+  // Check for plan passed from PlansView
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem('pending_deposit_plan');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setLinkedPlan(parsed);
+        setAmount(String(parsed.price));
+      }
+    } catch (e) {
+      console.warn("Session plan parse notice:", e);
+    }
+  }, []);
+
+  const pendingUserPlans = userPlans.filter(p => p.status === 'PENDING');
 
   useEffect(() => {
     if (!currentUser) return;
@@ -107,7 +136,10 @@ export const DepositView: React.FC<Props> = ({ setCurrentTab, openAuthModal }) =
       senderAccount.trim(),
       transactionId.trim(),
       proofUrl.trim() || undefined,
-      notes.trim() || undefined
+      notes.trim() || undefined,
+      linkedPlan?.userPlanId,
+      linkedPlan?.planId,
+      linkedPlan?.planName
     );
 
     if (res.success) {
@@ -118,6 +150,7 @@ export const DepositView: React.FC<Props> = ({ setCurrentTab, openAuthModal }) =
       setTransactionId('');
       setNotes('');
       setProofUrl('');
+      sessionStorage.removeItem('pending_deposit_plan');
     } else {
       setFeedback({
         type: 'error',
@@ -225,6 +258,65 @@ export const DepositView: React.FC<Props> = ({ setCurrentTab, openAuthModal }) =
         <div className="bg-slate-950 p-4 rounded-2xl border border-emerald-500/20 text-xs text-slate-300 space-y-1 whitespace-pre-line leading-relaxed">
           {settings.depositInstructions}
         </div>
+
+        {/* Linked Plan Order Box if present */}
+        {linkedPlan ? (
+          <div className="p-4 rounded-2xl bg-amber-950/40 border border-amber-500/40 flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+                <ShoppingBag className="w-5 h-5" />
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-black text-amber-400 block tracking-wider">
+                  Deposit Linked To Purchased Plan
+                </span>
+                <h4 className="text-sm font-black text-white font-['Outfit']">
+                  {linkedPlan.planName} ({linkedPlan.price.toLocaleString()} PKR)
+                </h4>
+                <p className="text-[11px] text-slate-300">
+                  Upon Owner/Admin verification of this deposit, this flock will automatically activate with its full egg yield cycle!
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setLinkedPlan(null)}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              title="Remove plan link"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : pendingUserPlans.length > 0 ? (
+          <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-2">
+            <span className="text-slate-400 text-[11px] block font-semibold">
+              You have {pendingUserPlans.length} pending flock reservation awaiting payment:
+            </span>
+            <div className="flex flex-wrap gap-2">
+              {pendingUserPlans.map(p => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => {
+                    setLinkedPlan({
+                      userPlanId: p.id,
+                      planId: p.planId,
+                      planName: p.planName,
+                      price: p.purchasePrice,
+                      henQuantity: p.henQuantity
+                    });
+                    setAmount(String(p.purchasePrice));
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold transition flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Link Deposit to {p.planName} ({p.purchasePrice.toLocaleString()} PKR)</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {/* Deposit Submission Form */}
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
@@ -352,13 +444,18 @@ export const DepositView: React.FC<Props> = ({ setCurrentTab, openAuthModal }) =
                 className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
               >
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-extrabold text-white text-sm font-['Outfit']">
                       +{dep.amount.toLocaleString()} PKR
                     </span>
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-950 border border-emerald-500/30 text-emerald-300">
                       {dep.method}
                     </span>
+                    {dep.planName && (
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-500/40">
+                        Linked Flock: {dep.planName}
+                      </span>
+                    )}
                   </div>
                   <div className="text-slate-400 space-x-2 mt-1 font-mono text-[11px]">
                     <span>TID: {dep.transactionId}</span>

@@ -58,9 +58,13 @@ export interface HenPlan {
   updatedAt?: string;
 }
 
+export type UserPlanStatus = 'PENDING' | 'ACTIVE' | 'COMPLETED' | 'EXPIRED';
+
 export interface UserPlan {
   id: string;
   userId: string;
+  userEmail?: string;
+  userName?: string;
   planId: string;
   planName: string;
   purchasePrice: number;
@@ -71,13 +75,18 @@ export interface UserPlan {
   lastCollectedAt: string;
   startDate: string;
   endDate: string;
-  status: 'ACTIVE' | 'COMPLETED' | 'EXPIRED';
+  status: UserPlanStatus;
   henType: string;
   henColor: string;
   eggColor: string;
   henImage?: string;
   eggImage?: string;
   henQuantity?: number;
+  depositId?: string;
+  createdAt?: string;
+  activatedAt?: string;
+  deactivatedAt?: string;
+  updatedAt?: string;
 }
 
 export type TransactionType = 
@@ -123,6 +132,9 @@ export interface DepositRequest {
   status: DepositStatus;
   approvedBy?: string;
   rejectionReason?: string;
+  planId?: string;
+  planName?: string;
+  userPlanId?: string;
   createdAt: string;
   reviewedAt?: string;
 }

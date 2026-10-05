@@ -52,7 +52,10 @@ interface FarmContextType {
     senderAccount: string, 
     txId: string, 
     proofUrl?: string, 
-    notes?: string
+    notes?: string,
+    userPlanId?: string,
+    planId?: string,
+    planName?: string
   ) => Promise<{ success: boolean; message: string }>;
   submitWithdrawal: (
     amount: number, 
@@ -61,14 +64,19 @@ interface FarmContextType {
     accountTitle: string
   ) => Promise<{ success: boolean; message: string }>;
   claimDailyCheckin: () => Promise<{ success: boolean; message: string }>;
+  createPendingUserPlan: (plan: HenPlan) => Promise<{ success: boolean; userPlanId?: string; message: string }>;
 
   // Admin / Owner Actions
+  allUserPlans: UserPlan[];
   allDeposits: DepositRequest[];
   allWithdrawals: WithdrawalRequest[];
   auditLogs: AdminAuditLog[];
   approveDeposit: (deposit: DepositRequest) => Promise<void>;
   rejectDeposit: (deposit: DepositRequest, reason: string) => Promise<void>;
   updateWithdrawalStatus: (withdrawal: WithdrawalRequest, newStatus: 'PROCESSING' | 'PAID' | 'REJECTED', note?: string) => Promise<void>;
+  activateUserPlan: (userPlanId: string) => Promise<void>;
+  deactivateUserPlan: (userPlanId: string, reason?: string) => Promise<void>;
+  updateUserPlanDetails: (userPlanId: string, updates: Partial<UserPlan>) => Promise<void>;
   savePlan: (plan: HenPlan) => Promise<void>;
   seedAll50Plans: () => Promise<void>;
   saveSettings: (settings: Partial<SystemSettings>) => Promise<void>;
@@ -90,6 +98,7 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   // Admin specific datasets
+  const [allUserPlans, setAllUserPlans] = useState<UserPlan[]>([]);
   const [allDeposits, setAllDeposits] = useState<DepositRequest[]>([]);
   const [allWithdrawals, setAllWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [auditLogs, setAuditLogs] = useState<AdminAuditLog[]>([]);
@@ -251,14 +260,24 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [currentUser]);
 
-  // 4. Admin Listeners (Deposits, Withdrawals, Audit Logs)
+  // 4. Admin Listeners (UserPlans, Deposits, Withdrawals, Audit Logs)
   useEffect(() => {
     if (!currentUser || !isAdmin) {
+      setAllUserPlans([]);
       setAllDeposits([]);
       setAllWithdrawals([]);
       setAuditLogs([]);
       return;
     }
+
+    // All user plans (Pending, Active, Expired)
+    const allPlansQ = collection(db, 'userPlans');
+    const unsubAllPlans = onSnapshot(allPlansQ, (snap) => {
+      const list: UserPlan[] = [];
+      snap.forEach(d => list.push(d.data() as UserPlan));
+      list.sort((a, b) => new Date(b.createdAt || b.startDate || '').getTime() - new Date(a.createdAt || a.startDate || '').getTime());
+      setAllUserPlans(list);
+    }, (err) => console.warn("Admin allUserPlans error:", err));
 
     // All deposits
     const depositsQ = collection(db, 'deposits');
@@ -288,6 +307,7 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, (err) => console.warn("Admin logs error:", err));
 
     return () => {
+      unsubAllPlans();
       unsubDeposits();
       unsubWithdrawals();
       unsubLogs();
@@ -467,6 +487,54 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // USER ACTION: SELECT / RESERVE PENDING PLAN FOR DEPOSIT
+  const createPendingUserPlan = async (plan: HenPlan): Promise<{ success: boolean; userPlanId?: string; message: string }> => {
+    if (!currentUser) {
+      return { success: false, message: 'Please log in to purchase a digital hen plan.' };
+    }
+
+    try {
+      const nowIso = new Date().toISOString();
+      const newUserPlanRef = doc(collection(db, 'userPlans'));
+      const henCount = plan.henQuantity || plan.planNumber;
+      const pendingUserPlan: UserPlan = {
+        id: newUserPlanRef.id,
+        userId: currentUser.uid,
+        userEmail: currentUser.email || '',
+        userName: userProfile?.username || 'Farmer',
+        planId: plan.id,
+        planName: plan.name,
+        purchasePrice: plan.price,
+        cycleDays: plan.cycleDays || 60,
+        dailyEggs: plan.dailyEggs,
+        eggValuePkr: plan.eggValuePkr || 40,
+        eggsCollectedTotal: 0,
+        lastCollectedAt: '',
+        startDate: '',
+        endDate: '',
+        status: 'PENDING',
+        henType: plan.henType || 'Heritage Layer',
+        henColor: plan.henColor || '#f59e0b',
+        eggColor: plan.eggColor || '#fef3c7',
+        henImage: plan.henImage || '',
+        eggImage: plan.eggImage || '',
+        henQuantity: henCount,
+        createdAt: nowIso
+      };
+
+      await setDoc(newUserPlanRef, pendingUserPlan);
+
+      return { 
+        success: true, 
+        userPlanId: newUserPlanRef.id, 
+        message: `Plan ${plan.name} selected! Please submit your deposit to activate this flock.` 
+      };
+    } catch (e: any) {
+      console.error("Create pending plan error:", e);
+      return { success: false, message: e.message || 'Failed to reserve plan' };
+    }
+  };
+
   // USER ACTION: COLLECT DAILY EGGS
   const collectEggs = async (targetUserPlanId?: string): Promise<{ success: boolean; collected: number; message: string }> => {
     if (!currentUser || !wallet) {
@@ -602,7 +670,10 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
     senderAccount: string, 
     txId: string, 
     proofUrl?: string, 
-    notes?: string
+    notes?: string,
+    userPlanId?: string,
+    planId?: string,
+    planName?: string
   ): Promise<{ success: boolean; message: string }> => {
     if (!currentUser || !wallet) {
       return { success: false, message: 'Please log in to submit a deposit.' };
@@ -639,11 +710,21 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
         proofUrl: proofUrl || '',
         notes: notes || '',
         status: 'PENDING',
-        createdAt: nowIso
+        createdAt: nowIso,
+        ...(userPlanId ? { userPlanId, planId, planName } : {})
       };
 
       const batch = writeBatch(db);
       batch.set(depRef, depositData);
+
+      // If linked to a pending user plan, link depositId on the user plan document
+      if (userPlanId) {
+        const uPlanRef = doc(db, 'userPlans', userPlanId);
+        batch.update(uPlanRef, {
+          depositId: depRef.id,
+          updatedAt: nowIso
+        });
+      }
 
       // Increment pending deposits on wallet
       const walletRef = doc(db, 'wallets', currentUser.uid);
@@ -662,7 +743,7 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
         direction: 'CREDIT',
         status: 'PENDING',
         referenceId: depRef.id,
-        description: `Deposit request via ${method} (TID: ${txId})`,
+        description: `Deposit request via ${method} (TID: ${txId})${planName ? ` for ${planName}` : ''}`,
         createdAt: nowIso
       });
 
@@ -670,7 +751,9 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return { 
         success: true, 
-        message: 'Deposit request submitted successfully! Funds will reflect in your wallet once verified by our audit team.' 
+        message: userPlanId 
+          ? `Deposit request submitted for ${planName || 'your plan'}! Your flock will automatically activate once confirmed by our audit team.` 
+          : 'Deposit request submitted successfully! Funds will reflect in your wallet once verified by our audit team.' 
       };
     } catch (e: any) {
       console.error("Deposit submission error:", e);
@@ -805,7 +888,7 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // ADMIN ACTION: APPROVE DEPOSIT
+  // ADMIN ACTION: APPROVE DEPOSIT (With automatic linked plan activation)
   const approveDeposit = async (deposit: DepositRequest) => {
     if (!isAdmin) return;
     try {
@@ -832,6 +915,14 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
           curTotalDep = wData.totalDeposited || 0;
         }
 
+        // Check if this deposit is linked to a userPlan
+        let linkedPlanSnap: any = null;
+        let linkedPlanRef: any = null;
+        if (deposit.userPlanId) {
+          linkedPlanRef = doc(db, 'userPlans', deposit.userPlanId);
+          linkedPlanSnap = await transaction.get(linkedPlanRef);
+        }
+
         // 1. Update deposit status
         transaction.update(depRef, {
           status: 'APPROVED',
@@ -839,13 +930,70 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
           reviewedAt: nowIso
         });
 
-        // 2. Credit wallet balance and decrement pending
-        transaction.update(walletRef, {
-          balance: curBal + deposit.amount,
-          pendingDeposits: Math.max(0, curPending - deposit.amount),
-          totalDeposited: curTotalDep + deposit.amount,
-          updatedAt: nowIso
-        });
+        // 2. Handle linked plan activation OR normal wallet balance credit
+        if (linkedPlanSnap && linkedPlanSnap.exists()) {
+          const pData = linkedPlanSnap.data() as UserPlan;
+          
+          // Prevent duplicate activation: only activate if currently PENDING
+          if (pData.status === 'PENDING') {
+            const cycleDays = pData.cycleDays || 60;
+            const endIso = new Date(Date.now() + cycleDays * 24 * 60 * 60 * 1000).toISOString();
+            
+            transaction.update(linkedPlanRef, {
+              status: 'ACTIVE',
+              startDate: nowIso,
+              endDate: endIso,
+              lastCollectedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), // Allow instant first harvest
+              activatedAt: nowIso,
+              depositId: deposit.id,
+              updatedAt: nowIso
+            });
+
+            // Prevent duplicate balance credit:
+            // Decrement pending deposits, increment totalDeposited.
+            // If the user deposited more than the plan price, credit the surplus to balance; otherwise balance is not duplicated.
+            const planCost = pData.purchasePrice || deposit.amount;
+            const excessAmount = Math.max(0, deposit.amount - planCost);
+
+            transaction.update(walletRef, {
+              balance: curBal + excessAmount,
+              pendingDeposits: Math.max(0, curPending - deposit.amount),
+              totalDeposited: curTotalDep + deposit.amount,
+              updatedAt: nowIso
+            });
+
+            // Record Plan Purchase transaction
+            const planTxRef = doc(collection(db, 'transactions'));
+            transaction.set(planTxRef, {
+              id: planTxRef.id,
+              userId: deposit.userId,
+              type: 'PLAN_PURCHASE',
+              amount: planCost,
+              direction: 'DEBIT',
+              status: 'COMPLETED',
+              referenceId: pData.id,
+              description: `Activated ${pData.planName} via approved deposit (${deposit.transactionId})`,
+              adminNote: `Deposit approved by ${currentUser?.email}`,
+              createdAt: nowIso
+            });
+          } else {
+            // Linked plan was already active (e.g. manually activated earlier)
+            // Just clear pending deposit and credit totalDeposited
+            transaction.update(walletRef, {
+              pendingDeposits: Math.max(0, curPending - deposit.amount),
+              totalDeposited: curTotalDep + deposit.amount,
+              updatedAt: nowIso
+            });
+          }
+        } else {
+          // Regular unlinked deposit: credit full amount to wallet balance
+          transaction.update(walletRef, {
+            balance: curBal + deposit.amount,
+            pendingDeposits: Math.max(0, curPending - deposit.amount),
+            totalDeposited: curTotalDep + deposit.amount,
+            updatedAt: nowIso
+          });
+        }
       });
 
       // Update matching transaction record
@@ -865,10 +1013,164 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
         'APPROVE_DEPOSIT',
         'Deposit',
         deposit.id,
-        `Approved deposit of ${deposit.amount} PKR for user ${deposit.userEmail} (TID: ${deposit.transactionId})`
+        `Approved deposit of ${deposit.amount} PKR for user ${deposit.userEmail} (TID: ${deposit.transactionId})${deposit.userPlanId ? ` and activated linked plan ${deposit.planName || deposit.userPlanId}` : ''}`
       );
     } catch (e) {
       console.error("Approve deposit failed:", e);
+      throw e;
+    }
+  };
+
+  // ADMIN ACTION: MANUALLY ACTIVATE A PENDING OR INACTIVE PLAN
+  const activateUserPlan = async (userPlanId: string) => {
+    if (!isAdmin) return;
+    try {
+      const nowIso = new Date().toISOString();
+      const planRef = doc(db, 'userPlans', userPlanId);
+      const planSnap = await getDoc(planRef);
+      if (!planSnap.exists()) {
+        throw new Error('User plan not found');
+      }
+      const pData = planSnap.data() as UserPlan;
+      if (pData.status === 'ACTIVE') {
+        throw new Error('This plan is already active.');
+      }
+
+      const cycleDays = pData.cycleDays || 60;
+      const endIso = new Date(Date.now() + cycleDays * 24 * 60 * 60 * 1000).toISOString();
+
+      await updateDoc(planRef, {
+        status: 'ACTIVE',
+        startDate: nowIso,
+        endDate: endIso,
+        lastCollectedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+        activatedAt: nowIso,
+        updatedAt: nowIso
+      });
+
+      // If there is a linked pending deposit, mark it approved as well and adjust wallet
+      if (pData.depositId) {
+        try {
+          const depRef = doc(db, 'deposits', pData.depositId);
+          const depSnap = await getDoc(depRef);
+          if (depSnap.exists() && depSnap.data().status === 'PENDING') {
+            await updateDoc(depRef, {
+              status: 'APPROVED',
+              approvedBy: currentUser?.email || 'Admin',
+              reviewedAt: nowIso
+            });
+            const walletRef = doc(db, 'wallets', pData.userId);
+            const wSnap = await getDoc(walletRef);
+            if (wSnap.exists()) {
+              const curPending = wSnap.data().pendingDeposits || 0;
+              const curTot = wSnap.data().totalDeposited || 0;
+              await updateDoc(walletRef, {
+                pendingDeposits: Math.max(0, curPending - depSnap.data().amount),
+                totalDeposited: curTot + depSnap.data().amount,
+                updatedAt: nowIso
+              });
+            }
+          }
+        } catch (depErr) {
+          console.warn("Linked deposit sync notice:", depErr);
+        }
+      }
+
+      // Record transaction
+      const txRef = doc(collection(db, 'transactions'));
+      await setDoc(txRef, {
+        id: txRef.id,
+        userId: pData.userId,
+        type: 'PLAN_PURCHASE',
+        amount: pData.purchasePrice,
+        direction: 'DEBIT',
+        status: 'COMPLETED',
+        referenceId: pData.id,
+        description: `Manually activated ${pData.planName} by Admin`,
+        adminNote: `Activated by ${currentUser?.email}`,
+        createdAt: nowIso
+      });
+
+      await logAdminAction(
+        'MANUAL_ACTIVATE_PLAN',
+        'UserPlan',
+        userPlanId,
+        `Manually activated plan ${pData.planName} for user ${pData.userEmail || pData.userId}`
+      );
+    } catch (e) {
+      console.error("Manual plan activation failed:", e);
+      throw e;
+    }
+  };
+
+  // ADMIN ACTION: DEACTIVATE A PLAN
+  const deactivateUserPlan = async (userPlanId: string, reason?: string) => {
+    if (!isAdmin) return;
+    try {
+      const nowIso = new Date().toISOString();
+      const planRef = doc(db, 'userPlans', userPlanId);
+      const planSnap = await getDoc(planRef);
+      if (!planSnap.exists()) throw new Error('User plan not found');
+      const pData = planSnap.data() as UserPlan;
+
+      await updateDoc(planRef, {
+        status: 'EXPIRED',
+        deactivatedAt: nowIso,
+        updatedAt: nowIso
+      });
+
+      await logAdminAction(
+        'DEACTIVATE_PLAN',
+        'UserPlan',
+        userPlanId,
+        `Deactivated plan ${pData.planName} for user ${pData.userEmail || pData.userId}. Reason: ${reason || 'Admin action'}`
+      );
+    } catch (e) {
+      console.error("Deactivate plan failed:", e);
+      throw e;
+    }
+  };
+
+  // ADMIN ACTION: EDIT USER PLAN DETAILS (Status, Hens, Start Date, Expiry Date, Rewards)
+  const updateUserPlanDetails = async (
+    userPlanId: string,
+    updates: {
+      status?: 'PENDING' | 'ACTIVE' | 'COMPLETED' | 'EXPIRED';
+      henQuantity?: number;
+      startDate?: string;
+      endDate?: string;
+      dailyEggs?: number;
+      eggValuePkr?: number;
+    }
+  ) => {
+    if (!isAdmin) return;
+    try {
+      const nowIso = new Date().toISOString();
+      const planRef = doc(db, 'userPlans', userPlanId);
+      const planSnap = await getDoc(planRef);
+      if (!planSnap.exists()) throw new Error('User plan not found');
+      const pData = planSnap.data() as UserPlan;
+
+      const sanitizedUpdates: any = {
+        updatedAt: nowIso
+      };
+      if (updates.status !== undefined) sanitizedUpdates.status = updates.status;
+      if (updates.henQuantity !== undefined) sanitizedUpdates.henQuantity = Number(updates.henQuantity);
+      if (updates.startDate !== undefined) sanitizedUpdates.startDate = updates.startDate;
+      if (updates.endDate !== undefined) sanitizedUpdates.endDate = updates.endDate;
+      if (updates.dailyEggs !== undefined) sanitizedUpdates.dailyEggs = Number(updates.dailyEggs);
+      if (updates.eggValuePkr !== undefined) sanitizedUpdates.eggValuePkr = Number(updates.eggValuePkr);
+
+      await updateDoc(planRef, sanitizedUpdates);
+
+      await logAdminAction(
+        'EDIT_USER_PLAN',
+        'UserPlan',
+        userPlanId,
+        `Edited plan ${pData.planName} details: ${JSON.stringify(updates)}`
+      );
+    } catch (e) {
+      console.error("Update plan details failed:", e);
       throw e;
     }
   };
@@ -1155,12 +1457,17 @@ export const FarmProvider: React.FC<{ children: React.ReactNode }> = ({ children
         submitDeposit,
         submitWithdrawal,
         claimDailyCheckin,
+        createPendingUserPlan,
+        allUserPlans,
         allDeposits,
         allWithdrawals,
         auditLogs,
         approveDeposit,
         rejectDeposit,
         updateWithdrawalStatus,
+        activateUserPlan,
+        deactivateUserPlan,
+        updateUserPlanDetails,
         savePlan,
         seedAll50Plans,
         saveSettings,

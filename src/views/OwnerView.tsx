@@ -28,7 +28,8 @@ import {
   TrendingUp,
   Sliders,
   BellRing,
-  Sparkles
+  Sparkles,
+  Layers
 } from 'lucide-react';
 import { collection, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -46,6 +47,7 @@ import {
 import { ReauthModal } from '../components/ReauthModal';
 import { HenIllustration, EggIllustration } from '../components/FarmIllustrations';
 import { PRESET_HEN_OPTIONS, PRESET_EGG_OPTIONS } from '../data/henAssets';
+import { UserPlansManager } from '../components/UserPlansManager';
 
 export const OwnerView: React.FC = () => {
   const { 
@@ -59,6 +61,7 @@ export const OwnerView: React.FC = () => {
 
   const { 
     plans, 
+    allUserPlans,
     settings, 
     allDeposits, 
     allWithdrawals, 
@@ -74,7 +77,7 @@ export const OwnerView: React.FC = () => {
   } = useFarm();
 
   const [activeTab, setActiveTab] = useState<
-    'kpis' | 'plans' | 'website' | 'payments' | 'referrals' | 'system' | 'admins' | 'users' | 'deposits' | 'withdrawals' | 'audit'
+    'kpis' | 'plans' | 'user-plans' | 'website' | 'payments' | 'referrals' | 'system' | 'admins' | 'users' | 'deposits' | 'withdrawals' | 'audit'
   >('kpis');
 
   // Reauth modal state
@@ -229,6 +232,7 @@ export const OwnerView: React.FC = () => {
         {[
           { id: 'kpis', label: 'Dashboard KPIs', icon: TrendingUp },
           { id: 'plans', label: `Plan Management (50)`, icon: ShoppingBag, badge: activePlansCount },
+          { id: 'user-plans', label: `Purchased Plans (${allUserPlans.length})`, icon: Layers, badge: allUserPlans.filter(p => p.status === 'PENDING').length || undefined },
           { id: 'payments', label: 'Payment Gateways', icon: CreditCard },
           { id: 'website', label: 'Website Settings', icon: Globe },
           { id: 'referrals', label: 'Referral Tiers', icon: Users },
@@ -758,6 +762,21 @@ export const OwnerView: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* 2B. PURCHASED USER PLANS (PENDING / ACTIVE / EXPIRED) */}
+      {activeTab === 'user-plans' && (
+        <div className="bg-slate-900/90 border border-amber-500/30 rounded-3xl p-6 shadow-xl space-y-4">
+          <div className="pb-2 border-b border-slate-800">
+            <h3 className="text-lg font-black text-white font-['Outfit']">
+              Purchased User Plans & Roost Management
+            </h3>
+            <p className="text-xs text-slate-400">
+              Audit all user flocks: view pending/active/expired plans, activate or deactivate roosts, edit plan status/hens/dates, and inspect linked deposits.
+            </p>
+          </div>
+          <UserPlansManager />
         </div>
       )}
 
